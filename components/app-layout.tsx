@@ -30,6 +30,7 @@ import {
   LightModeOutlined,
   DarkModeOutlined,
   SettingsBrightnessOutlined,
+  SettingsOutlined,
 } from "@mui/icons-material"
 import { useTheme } from "./theme-provider"
 
@@ -38,6 +39,7 @@ const navigation = [
   { name: "Members", href: "/members", icon: PeopleOutlined },
   { name: "Reports", href: "/reports", icon: TrendingUpOutlined },
   { name: "History", href: "/history", icon: HistoryOutlined },
+  { name: "Settings", href: "/settings", icon: SettingsOutlined },
 ]
 
 const drawerWidth = 240

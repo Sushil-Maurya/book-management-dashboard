@@ -1,8 +1,6 @@
 import axios from "axios"
 import type { Member, MemberFormData } from "./types"
-
-const BASE_URL = "https://crudcrud.com/api/9e96800dde894c34a47a7d602bbff73e"
-const MEMBERS_ENDPOINT = `${BASE_URL}/members`
+import { requestWithRotation } from "./crudcrud"
 
 type CrudCrudMember = Omit<Member, "id"> & { _id: string }
 
@@ -20,7 +18,11 @@ function mapFromCrud(m: CrudCrudMember): Member {
 
 export const membersApi = {
   async list(): Promise<Member[]> {
-    const { data } = await axios.get<CrudCrudMember[]>(MEMBERS_ENDPOINT)
+    const data = await requestWithRotation(async (base) => {
+      const url = `${base}/members`
+      const res = await axios.get<CrudCrudMember[]>(url)
+      return res.data
+    })
     return data.map(mapFromCrud)
   },
 
@@ -30,19 +32,31 @@ export const membersApi = {
       joinDate: new Date().toISOString().slice(0, 10),
       booksIssued: 0,
     }
-    const { data } = await axios.post<CrudCrudMember>(MEMBERS_ENDPOINT, body)
+    const data = await requestWithRotation(async (base) => {
+      const url = `${base}/members`
+      const res = await axios.post<CrudCrudMember>(url, body)
+      return res.data
+    })
     return mapFromCrud(data)
   },
 
   async update(id: string, payload: Partial<MemberFormData>): Promise<Member> {
-    const current = await axios.get<CrudCrudMember>(`${MEMBERS_ENDPOINT}/${id}`)
-    const updated = { ...current.data, ...payload }
-    const { _id, ...putBody } = updated
-    await axios.put(`${MEMBERS_ENDPOINT}/${id}`, putBody)
-    return mapFromCrud({ ...(putBody as any), _id: id })
+    return await requestWithRotation(async (base) => {
+      const getUrl = `${base}/members/${id}`
+      const current = await axios.get<CrudCrudMember>(getUrl)
+      const updated = { ...current.data, ...payload }
+      const { _id, ...putBody } = updated as any
+      const putUrl = `${base}/members/${id}`
+      await axios.put(putUrl, putBody)
+      return mapFromCrud({ ...(putBody as any), _id: id })
+    })
   },
 
   async remove(id: string): Promise<void> {
-    await axios.delete(`${MEMBERS_ENDPOINT}/${id}`)
+    await requestWithRotation(async (base) => {
+      const url = `${base}/members/${id}`
+      await axios.delete(url)
+      return null as any
+    })
   },
 }

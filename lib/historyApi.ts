@@ -1,8 +1,6 @@
 import axios from "axios"
 import type { ActivityRecord } from "./types"
-
-const BASE_URL = "https://crudcrud.com/api/9e96800dde894c34a47a7d602bbff73e"
-const HISTORY_ENDPOINT = `${BASE_URL}/history`
+import { requestWithRotation } from "./crudcrud"
 
 type CrudCrudActivity = Omit<ActivityRecord, "id"> & { _id: string }
 
@@ -19,12 +17,20 @@ function mapFromCrud(a: CrudCrudActivity): ActivityRecord {
 
 export const historyApi = {
   async list(): Promise<ActivityRecord[]> {
-    const { data } = await axios.get<CrudCrudActivity[]>(HISTORY_ENDPOINT)
+    const data = await requestWithRotation(async (base) => {
+      const url = `${base}/history`
+      const res = await axios.get<CrudCrudActivity[]>(url)
+      return res.data
+    })
     return data.map(mapFromCrud)
   },
 
   async create(activity: Omit<ActivityRecord, "id">): Promise<ActivityRecord> {
-    const { data } = await axios.post<CrudCrudActivity>(HISTORY_ENDPOINT, activity)
+    const data = await requestWithRotation(async (base) => {
+      const url = `${base}/history`
+      const res = await axios.post<CrudCrudActivity>(url, activity)
+      return res.data
+    })
     return mapFromCrud(data)
   },
 }

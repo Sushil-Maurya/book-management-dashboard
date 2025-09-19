@@ -1,8 +1,6 @@
 import axios from "axios"
 import type { Book, BookFormData } from "./types"
-
-const BASE_URL = "https://crudcrud.com/api/9e96800dde894c34a47a7d602bbff73e"
-const BOOKS_ENDPOINT = `${BASE_URL}/books`
+import { requestWithRotation } from "./crudcrud"
 
 type CrudCrudBook = Omit<Book, "id"> & { _id: string }
 
@@ -27,7 +25,11 @@ export const booksApi = {
     limit = 10,
     filters?: { search?: string; genre?: string; status?: string },
   ): Promise<{ books: Book[]; total: number }> {
-    const { data } = await axios.get<CrudCrudBook[]>(BOOKS_ENDPOINT)
+    const data = await requestWithRotation(async (base) => {
+      const url = `${base}/books`
+      const res = await axios.get<CrudCrudBook[]>(url)
+      return res.data
+    })
     let all = data.map(mapFromCrud)
 
     // client-side filters
@@ -49,7 +51,11 @@ export const booksApi = {
   },
 
   async getBook(id: string): Promise<Book | null> {
-    const { data } = await axios.get<CrudCrudBook>(`${BOOKS_ENDPOINT}/${id}`)
+    const data = await requestWithRotation(async (base) => {
+      const url = `${base}/books/${id}`
+      const res = await axios.get<CrudCrudBook>(url)
+      return res.data
+    })
     return data ? mapFromCrud(data) : null
   },
 
@@ -59,30 +65,45 @@ export const booksApi = {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }
-    const { data } = await axios.post<CrudCrudBook>(BOOKS_ENDPOINT, payload)
+    const data = await requestWithRotation(async (base) => {
+      const url = `${base}/books`
+      const res = await axios.post<CrudCrudBook>(url, payload)
+      return res.data
+    })
     return mapFromCrud(data)
   },
 
   async updateBook(id: string, bookData: Partial<BookFormData>): Promise<Book> {
     // CrudCrud requires PUT to replace the document without _id
-    const current = await axios.get<CrudCrudBook>(`${BOOKS_ENDPOINT}/${id}`)
-    const updated = {
-      ...current.data,
-      ...bookData,
-      updatedAt: new Date().toISOString(),
-    }
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { _id, ...putBody } = updated
-    await axios.put(`${BOOKS_ENDPOINT}/${id}`, putBody)
-    return mapFromCrud({ ...(putBody as any), _id: id })
+    return await requestWithRotation(async (base) => {
+      const getUrl = `${base}/books/${id}`
+      const current = await axios.get<CrudCrudBook>(getUrl)
+      const updated = {
+        ...current.data,
+        ...bookData,
+        updatedAt: new Date().toISOString(),
+      }
+      const { _id, ...putBody } = updated as any
+      const putUrl = `${base}/books/${id}`
+      await axios.put(putUrl, putBody)
+      return mapFromCrud({ ...(putBody as any), _id: id })
+    })
   },
 
   async deleteBook(id: string): Promise<void> {
-    await axios.delete(`${BOOKS_ENDPOINT}/${id}`)
+    await requestWithRotation(async (base) => {
+      const url = `${base}/books/${id}`
+      await axios.delete(url)
+      return null as any
+    })
   },
 
   async getGenres(): Promise<string[]> {
-    const { data } = await axios.get<CrudCrudBook[]>(BOOKS_ENDPOINT)
+    const data = await requestWithRotation(async (base) => {
+      const url = `${base}/books`
+      const res = await axios.get<CrudCrudBook[]>(url)
+      return res.data
+    })
     const genres = [...new Set(data.map((b) => b.genre))]
     return genres.sort()
   },
