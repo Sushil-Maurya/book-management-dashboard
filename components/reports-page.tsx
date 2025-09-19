@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Download, BarChart3, PieChart, TrendingUp, Calendar } from "lucide-react"
+import { Download, BarChart3, PieChart, TrendingUp, Calendar, RefreshCw, AlertCircle } from "lucide-react"
 import { reportsApi } from "@/lib/reportsApi"
 import type { ReportData } from "@/lib/types"
 
@@ -30,7 +30,9 @@ type ExportFormValues = z.infer<typeof exportFormSchema>
 export function ReportsPage() {
   const [reports, setReports] = useState<ReportData[]>([])
   const [showExportModal, setShowExportModal] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
 
   const form = useForm<ExportFormValues>({
     resolver: zodResolver(exportFormSchema),
@@ -40,6 +42,21 @@ export function ReportsPage() {
       dateRange: "",
     },
   })
+
+  const refreshReports = async () => {
+    setLoading(true)
+    setError(null)
+    try {
+      const list = await reportsApi.list()
+      setReports(list)
+      setLastRefreshed(new Date())
+    } catch (err) {
+      setError('Failed to load reports. Please try again.')
+      console.error('Error loading reports:', err)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const onSubmit = async (values: ExportFormValues) => {
     setLoading(true)
@@ -89,16 +106,14 @@ export function ReportsPage() {
   }
 
   useEffect(() => {
-    const load = async () => {
-      setLoading(true)
-      try {
-        const list = await reportsApi.list()
-        setReports(list)
-      } finally {
-        setLoading(false)
-      }
-    }
-    load()
+    refreshReports()
+    
+    // Set up auto-refresh every 30 seconds
+    const interval = setInterval(() => {
+      refreshReports()
+    }, 30000)
+    
+    return () => clearInterval(interval)
   }, [])
 
   // Dynamic stats derived from reports
@@ -118,11 +133,38 @@ export function ReportsPage() {
     <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold">Analytics & Reports</h1>
-          <p className="text-muted-foreground">Track library performance and generate insights</p>
+        <div className="space-y-1">
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold">Analytics & Reports</h1>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={refreshReports}
+              disabled={loading}
+              className="h-8 w-8"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            </Button>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span>Track library performance and generate insights</span>
+            {lastRefreshed && (
+              <span className="text-xs text-muted-foreground">
+                Last updated: {new Date(lastRefreshed).toLocaleTimeString()}
+              </span>
+            )}
+          </div>
+          {error && (
+            <div className="text-sm text-red-600 flex items-center gap-2">
+              <AlertCircle className="h-4 w-4" />
+              {error}
+            </div>
+          )}
         </div>
-        <Button onClick={() => setShowExportModal(true)}>
+        <Button 
+          onClick={() => setShowExportModal(true)}
+          disabled={loading}
+        >
           <Download className="mr-2 h-4 w-4" />
           Export Report
         </Button>
@@ -174,9 +216,14 @@ export function ReportsPage() {
 
       {/* Generated Reports Table */}
       <Card>
-        <CardHeader>
-          <CardTitle>Generated Reports</CardTitle>
-          <CardDescription>View and download your generated reports</CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <div>
+            <CardTitle>Generated Reports</CardTitle>
+            <CardDescription>View and download your generated reports</CardDescription>
+          </div>
+          <div className="text-sm text-muted-foreground">
+            {reports.length} report{reports.length !== 1 ? 's' : ''} • {readyReports} ready
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -190,7 +237,13 @@ export function ReportsPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {reports.map((report) => (
+              {reports.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                    {loading ? 'Loading reports...' : 'No reports generated yet'}
+                  </TableCell>
+                </TableRow>
+              ) : reports.map((report) => (
                 <TableRow key={report.id}>
                   <TableCell className="font-medium">{report.title}</TableCell>
                   <TableCell>{report.type}</TableCell>

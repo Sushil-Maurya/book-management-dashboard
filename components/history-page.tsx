@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { Filter, History, BookOpen, User, Calendar } from "lucide-react"
+import { Filter, History, BookOpen, User, Calendar, RefreshCw } from "lucide-react"
 import { historyApi } from "@/lib/historyApi"
 import type { ActivityRecord } from "@/lib/types"
 
@@ -29,7 +29,8 @@ export function HistoryPage() {
   const [activities, setActivities] = useState<ActivityRecord[]>([])
   const [filteredActivities, setFilteredActivities] = useState<ActivityRecord[]>([])
   const [showFilterModal, setShowFilterModal] = useState(false)
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [lastRefreshed, setLastRefreshed] = useState<Date | null>(null)
 
   const form = useForm<FilterFormValues>({
     resolver: zodResolver(filterFormSchema),
@@ -40,6 +41,20 @@ export function HistoryPage() {
       user: "",
     },
   })
+
+  const refreshData = async () => {
+    setLoading(true)
+    try {
+      const list = await historyApi.list()
+      setActivities(list)
+      setFilteredActivities(list)
+      setLastRefreshed(new Date())
+    } catch (error) {
+      console.error('Failed to refresh history:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const onSubmit = (values: FilterFormValues) => {
     let filtered = activities
@@ -91,17 +106,14 @@ export function HistoryPage() {
   }
 
   useEffect(() => {
-    const load = async () => {
-      setLoading(true)
-      try {
-        const list = await historyApi.list()
-        setActivities(list)
-        setFilteredActivities(list)
-      } finally {
-        setLoading(false)
-      }
-    }
-    load()
+    refreshData()
+    
+    // Set up auto-refresh every 30 seconds
+    const interval = setInterval(() => {
+      refreshData()
+    }, 30000)
+    
+    return () => clearInterval(interval)
   }, [])
 
   // Dynamic stats derived from activities
@@ -150,14 +162,34 @@ export function HistoryPage() {
     <div className="p-6 space-y-6">
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold">Activity History</h1>
-          <p className="text-muted-foreground">Track all library transactions and activities</p>
+        <div className="space-y-1">
+          <div className="flex items-center gap-3">
+            <h1 className="text-3xl font-bold">Activity History</h1>
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={refreshData}
+              disabled={loading}
+              className="h-8 w-8"
+            >
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            </Button>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <span>Track all library transactions and activities</span>
+            {lastRefreshed && (
+              <span className="text-xs text-muted-foreground">
+                Last updated: {new Date(lastRefreshed).toLocaleTimeString()}
+              </span>
+            )}
+          </div>
         </div>
-        <Button variant="outline" onClick={() => setShowFilterModal(true)}>
-          <Filter className="mr-2 h-4 w-4" />
-          Filter History
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setShowFilterModal(true)}>
+            <Filter className="mr-2 h-4 w-4" />
+            Filter History
+          </Button>
+        </div>
       </div>
 
       {/* Activity Stats */}

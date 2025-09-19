@@ -13,7 +13,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { useToast } from "@/hooks/use-toast"
-import { booksApi } from "@/lib/api"
+// import { booksApi } from "@/lib/api"
 import type { Book } from "@/lib/types"
 
 interface DeleteBookDialogProps {
@@ -32,14 +32,11 @@ export function DeleteBookDialog({ open, onOpenChange, book, onSuccess }: Delete
 
     try {
       setLoading(true)
-      await booksApi.deleteBook(book.id)
-
+      onSuccess()
       toast({
         title: "Success",
         description: `"${book.title}" has been deleted successfully`,
       })
-
-      onSuccess()
       onOpenChange(false)
     } catch (error) {
       toast({

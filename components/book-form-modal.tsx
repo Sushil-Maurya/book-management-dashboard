@@ -11,8 +11,9 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"
 import { useToast } from "@/hooks/use-toast"
-import { booksApi } from "@/lib/api"
+// import { booksApi } from "@/lib/api"
 import type { Book } from "@/lib/types"
+import { useBooks } from "@/hooks/use-books"
 
 const bookFormSchema = z.object({
   title: z.string().min(1, "Title is required").max(200, "Title must be less than 200 characters"),
@@ -33,14 +34,16 @@ type BookFormValues = z.infer<typeof bookFormSchema>
 
 interface BookFormModalProps {
   open: boolean
-  onOpenChange: (open: boolean) => void
+  onClose: () => void
   book?: Book | null
-  onSuccess: () => void
+  onSuccess: (values: BookFormValues) => void
+  getGenres: () => string[]
 }
 
-export function BookFormModal({ open, onOpenChange, book, onSuccess }: BookFormModalProps) {
+export function BookFormModal({ open, onClose, book, onSuccess ,getGenres}: BookFormModalProps) {
+
   const [loading, setLoading] = useState(false)
-  const [genres, setGenres] = useState<string[]>([])
+  const genres = getGenres()
   const { toast } = useToast()
 
   const form = useForm<BookFormValues>({
@@ -56,18 +59,7 @@ export function BookFormModal({ open, onOpenChange, book, onSuccess }: BookFormM
     },
   })
 
-  useEffect(() => {
-    const fetchGenres = async () => {
-      try {
-        const genreList = await booksApi.getGenres()
-        setGenres(genreList)
-      } catch (error) {
-        console.error("Failed to fetch genres:", error)
-      }
-    }
-    fetchGenres()
-  }, [])
-
+  
   useEffect(() => {
     if (open) {
       if (book) {
@@ -98,22 +90,22 @@ export function BookFormModal({ open, onOpenChange, book, onSuccess }: BookFormM
     try {
       setLoading(true)
 
-      if (book) {
-        await booksApi.updateBook(book.id, values)
-        toast({
-          title: "Success",
-          description: "Book updated successfully",
-        })
-      } else {
-        await booksApi.createBook(values)
-        toast({
-          title: "Success",
-          description: "Book added successfully",
-        })
-      }
+      // if (book) {
+      //   await updateBook(book.id, values)
+      //   toast({
+      //     title: "Success",
+      //     description: "Book updated successfully",
+      //   })
+      // } else {
+      //   await createBook(values)
+      //   toast({
+      //     title: "Success",
+      //     description: "Book added successfully",
+      //   })
+      // }
 
-      onSuccess()
-      onOpenChange(false)
+      onSuccess(values)
+      onClose()
     } catch (error) {
       toast({
         title: "Error",
@@ -127,7 +119,7 @@ export function BookFormModal({ open, onOpenChange, book, onSuccess }: BookFormM
 
   const handleClose = () => {
     if (!loading) {
-      onOpenChange(false)
+      onClose()
     }
   }
 

@@ -8,30 +8,21 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { booksApi } from "@/lib/api"
+// import { booksApi } from "@/lib/api"
 import type { BookFilters as BookFiltersType } from "@/lib/types"
 
 interface BookFiltersProps {
   filters: BookFiltersType
   onFiltersChange: (filters: Partial<BookFiltersType>) => void
   loading: boolean
+  getGenres: () => string[]
 }
 
-export function BookFilters({ filters, onFiltersChange, loading }: BookFiltersProps) {
-  const [genres, setGenres] = useState<string[]>([])
+export function BookFilters({ filters, onFiltersChange, loading, getGenres }: BookFiltersProps) {
+
   const [searchInput, setSearchInput] = useState(filters.search)
 
-  useEffect(() => {
-    const fetchGenres = async () => {
-      try {
-        const genreList = await booksApi.getGenres()
-        setGenres(genreList)
-      } catch (error) {
-        console.error("Failed to fetch genres:", error)
-      }
-    }
-    fetchGenres()
-  }, [])
+  
 
   useEffect(() => {
     setSearchInput(filters.search)
@@ -81,7 +72,7 @@ export function BookFilters({ filters, onFiltersChange, loading }: BookFiltersPr
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Genres</SelectItem>
-            {genres.map((genre) => (
+            {getGenres().map((genre) => (
               <SelectItem key={genre} value={genre}>
                 {genre}
               </SelectItem>

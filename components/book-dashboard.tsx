@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import React, { useState, useCallback, useMemo } from "react"
 import { Box, Button, Card, CardContent, CardHeader, Typography, Skeleton } from "@mui/material"
 import { Add as AddIcon } from "@mui/icons-material"
 import { useBooks } from "@/hooks/use-books"
@@ -13,16 +13,19 @@ import { BookDetailModal } from "./book-detail-modal"
 import { EmptyState } from "./empty-state"
 import { LoadingSpinner } from "./loading-spinner"
 import type { Book } from "@/lib/types"
+import { useToast } from "@/hooks/use-toast"
 
 export function BookDashboard() {
-  const { books, loading, error, pagination, filters, updateFilters, goToPage, refreshBooks } = useBooks()
+  const { books, loading, error, pagination, filters, updateFilters, goToPage, refreshBooks ,getGenres,deleteBook,updateBook,createBook} = useBooks()
   const [showAddModal, setShowAddModal] = useState(false)
   const [editingBook, setEditingBook] = useState<Book | null>(null)
   const [deletingBook, setDeletingBook] = useState<Book | null>(null)
   const [viewingBook, setViewingBook] = useState<Book | null>(null)
+  const { toast } = useToast()
 
   const handleEditBook = (book: Book) => {
     setEditingBook(book)
+    setShowAddModal(true)
   }
 
   const handleDeleteBook = (book: Book) => {
@@ -46,15 +49,46 @@ export function BookDashboard() {
     setViewingBook(null)
   }
 
-  const handleModalSuccess = () => {
-    refreshBooks()
-    handleCloseModal()
+  const handleModalSuccess = async (bookData: any) => {
+    try {
+      if (editingBook) {
+        await updateBook(editingBook.id, bookData)
+        toast({
+          title: "Success",
+          description: "Book updated successfully",
+        })
+      } else {
+        await createBook(bookData)
+        toast({
+          title: "Success",
+          description: "Book added successfully",
+        })
+      }
+      handleCloseModal()
+    } catch (error) {
+      console.error('Error saving book:', error)
+    }
   }
 
-  const handleDeleteSuccess = () => {
-    refreshBooks()
-    handleCloseDeleteDialog()
+  const handleDeleteSuccess = async () => {
+    if (deletingBook) {
+      try {
+        await deleteBook(deletingBook.id)
+        handleCloseDeleteDialog()
+      } catch (error) {
+        console.error('Error deleting book:', error)
+      }
+    }
+  } 
+
+  const handlePageChange = (newPage: number) => {
+    goToPage(newPage)
   }
+
+  const retryAction = useMemo(() => ({
+    label: "Retry",
+    onClick: refreshBooks,
+  }), [refreshBooks])
 
   if (error) {
     return (
@@ -63,10 +97,7 @@ export function BookDashboard() {
           type="error"
           title="Failed to Load Books"
           description="There was an error loading your book collection. Please check your connection and try again."
-          action={{
-            label: "Retry",
-            onClick: refreshBooks,
-          }}
+          action={retryAction}
         />
       </Box>
     )
@@ -95,9 +126,9 @@ export function BookDashboard() {
         </Box>
         <Button
           variant="contained"
+          size="medium"
           startIcon={<AddIcon />}
           onClick={() => setShowAddModal(true)}
-          sx={{ minWidth: { xs: "100%", sm: "auto" } }}
         >
           Add Book
         </Button>
@@ -112,7 +143,12 @@ export function BookDashboard() {
           <Typography variant="h6">Search & Filter</Typography>
         </CardHeader>
         <CardContent>
-          <BookFilters filters={filters} onFiltersChange={updateFilters} loading={loading} />
+          <BookFilters
+            filters={filters}
+            onFiltersChange={updateFilters}
+            loading={loading}
+            getGenres={getGenres}
+          />
         </CardContent>
       </Card>
 
@@ -153,12 +189,13 @@ export function BookDashboard() {
       </Card>
 
       {/* Modals and Dialogs */}
-      <BookFormModal
-        open={showAddModal || editingBook !== null}
-        onOpenChange={handleCloseModal}
-        book={editingBook}
+ {showAddModal && <BookFormModal
+        open={showAddModal}
+        onClose={handleCloseModal}
         onSuccess={handleModalSuccess}
-      />
+        book={editingBook}
+        getGenres={getGenres}
+      />}
 
       <DeleteBookDialog
         open={deletingBook !== null}

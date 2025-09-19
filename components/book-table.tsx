@@ -7,6 +7,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { EmptyState } from "./empty-state"
 import type { Book, PaginationInfo } from "@/lib/types"
+import { useMemo } from "react"
+import { Button as MuiButton } from "@mui/material"
 
 interface BookTableProps {
   books: Book[]
@@ -85,16 +87,18 @@ export function BookTable({
     )
   }
 
+  const filterAction = useMemo(() => ({
+    label: "Clear Filters",
+    onClick: onRefresh,
+  }), [onRefresh])
+
   if (books.length === 0) {
     return (
       <EmptyState
         type="no-results"
         title="No Books Found"
         description="No books match your current search criteria. Try adjusting your filters or search terms."
-        action={{
-          label: "Clear Filters",
-          onClick: onRefresh,
-        }}
+        action={filterAction}
       />
     )
   }
@@ -173,15 +177,15 @@ export function BookTable({
           results
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
+          <MuiButton
+            variant="outlined"
+            size="small"
             onClick={() => onPageChange(pagination.currentPage - 1)}
             disabled={pagination.currentPage <= 1}
+            startIcon={<ChevronLeft className="h-4 w-4 ml-1" />}
           >
-            <ChevronLeft className="h-4 w-4 mr-1" />
             Previous
-          </Button>
+          </MuiButton>
           <div className="flex items-center gap-1">
             {Array.from({ length: pagination.totalPages }, (_, i) => i + 1)
               .filter((page) => {
@@ -204,15 +208,15 @@ export function BookTable({
                 </div>
               ))}
           </div>
-          <Button
-            variant="outline"
-            size="sm"
+          <MuiButton
+            variant="outlined"
+            size="small"
             onClick={() => onPageChange(pagination.currentPage + 1)}
             disabled={pagination.currentPage >= pagination.totalPages}
+            endIcon={<ChevronRight className="h-4 w-4 ml-1" />}
           >
             Next
-            <ChevronRight className="h-4 w-4 ml-1" />
-          </Button>
+          </MuiButton>
         </div>
       </div>
     </div>

@@ -1,70 +1,90 @@
-"use client"
-
-import { useState, useEffect } from "react"
-import type { Book, BookFilters, PaginationInfo } from "@/lib/types"
+import { useState, useEffect, useCallback } from "react"
+import type { Book, BookFormData, BookFilters, PaginationInfo } from "@/lib/types"
 import { booksApi } from "@/lib/api"
 
 export function useBooks() {
-  const [books, setBooks] = useState<Book[]>([])
+  const [allBooks, setAllBooks] = useState<Book[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [pagination, setPagination] = useState<PaginationInfo>({
-    currentPage: 1,
-    totalPages: 1,
-    totalItems: 0,
-    itemsPerPage: 10,
-  })
+
   const [filters, setFilters] = useState<BookFilters>({
     search: "",
     genre: "all",
     status: "all",
   })
 
-  const fetchBooks = async (page = 1, currentFilters: BookFilters = filters) => {
+  const [pagination, setPagination] = useState<PaginationInfo>({
+    currentPage: 1,
+    totalPages: 1,
+    totalItems: 0,
+    itemsPerPage: 10,
+  })
+
+  // API calls
+  const refreshBooks = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
-
-      const { books: fetchedBooks, total } = await booksApi.getBooks(page, pagination.itemsPerPage, {
-        search: currentFilters.search,
-        genre: currentFilters.genre === "all" ? undefined : currentFilters.genre,
-        status: currentFilters.status === "all" ? undefined : currentFilters.status,
-      })
-
-      setBooks(fetchedBooks)
-      setPagination((prev) => ({
+      const { books: fetchedBooks, total } = await booksApi.getBooks(
+        pagination.currentPage,
+        pagination.itemsPerPage,
+        {
+          search: filters.search,
+          genre: filters.genre !== 'all' ? filters.genre : undefined,
+          status: filters.status !== 'all' ? filters.status : undefined,
+        }
+      )
+      
+      setAllBooks(fetchedBooks)
+      setPagination(prev => ({
         ...prev,
-        currentPage: page,
         totalItems: total,
-        totalPages: Math.ceil(total / prev.itemsPerPage),
+        totalPages: Math.ceil(total / prev.itemsPerPage)
       }))
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch books")
     } finally {
       setLoading(false)
     }
-  }
+  }, [pagination.currentPage, pagination.itemsPerPage, filters.search, filters.genre, filters.status])
+
+  // Books are already filtered and paginated by the API
+  const books = allBooks
 
   const updateFilters = (newFilters: Partial<BookFilters>) => {
-    const updatedFilters = { ...filters, ...newFilters }
-    setFilters(updatedFilters)
-    fetchBooks(1, updatedFilters) // Reset to page 1 when filters change
+    setFilters((prev) => ({ ...prev, ...newFilters }))
+    setPagination((prev) => ({ ...prev, currentPage: 1 }))
   }
 
   const goToPage = (page: number) => {
-    fetchBooks(page)
+    setPagination((prev) => ({ ...prev, currentPage: page }))
   }
 
-  const refreshBooks = () => {
-    fetchBooks(pagination.currentPage)
+  const getBook = (id: string) => allBooks.find((b) => b.id === id)
+  const createBook = async (data: BookFormData) => {
+    const newBook = await booksApi.createBook(data)
+    await refreshBooks()
+    return newBook
   }
+  const updateBook = async (id: string, data: Partial<BookFormData>) => {
+    const updated = await booksApi.updateBook(id, data)
+    await refreshBooks()
+    return updated
+  }
+  const deleteBook = async (id: string) => {
+    await booksApi.deleteBook(id)
+    await refreshBooks()
+  }
+  const getGenres = () => [...new Set(allBooks.map((b) => b.genre))]
 
+  // Initial load and when filters/pagination changes
   useEffect(() => {
-    fetchBooks()
-  }, [])
+    refreshBooks()
+  }, [refreshBooks])
 
   return {
-    books,
+    books,        // derived
+    allBooks,     // raw
     loading,
     error,
     pagination,
@@ -72,5 +92,10 @@ export function useBooks() {
     updateFilters,
     goToPage,
     refreshBooks,
+    getBook,
+    createBook,
+    updateBook,
+    deleteBook,
+    getGenres,
   }
 }
