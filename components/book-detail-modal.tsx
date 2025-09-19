@@ -93,9 +93,9 @@ export function BookDetailModal({ open, onOpenChange, book }: BookDetailModalPro
             <>
               <Separator />
               <div className="text-xs text-muted-foreground space-y-1">
-                {book.createdAt && <p>Added: {new Date(book.createdAt).toLocaleDateString()}</p>}
+                {book.createdAt && <p>Added: {new Date(book.createdAt).toISOString().slice(0, 10)}</p>}
                 {book.updatedAt && book.updatedAt !== book.createdAt && (
-                  <p>Last updated: {new Date(book.updatedAt).toLocaleDateString()}</p>
+                  <p>Last updated: {new Date(book.updatedAt).toISOString().slice(0, 10)}</p>
                 )}
               </div>
             </>

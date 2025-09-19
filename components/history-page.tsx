@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
@@ -13,6 +13,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Filter, History, BookOpen, User, Calendar } from "lucide-react"
+import { historyApi } from "@/lib/historyApi"
+import type { ActivityRecord } from "@/lib/types"
 
 const filterFormSchema = z.object({
   type: z.string(),
@@ -23,62 +25,11 @@ const filterFormSchema = z.object({
 
 type FilterFormValues = z.infer<typeof filterFormSchema>
 
-interface ActivityRecord {
-  id: string
-  type: "Borrow" | "Return" | "Register" | "Update"
-  description: string
-  user: string
-  timestamp: string
-  status: "Success" | "Pending" | "Failed"
-}
-
-const mockActivities: ActivityRecord[] = [
-  {
-    id: "1",
-    type: "Borrow",
-    description: "The Great Gatsby borrowed by John Doe",
-    user: "John Doe",
-    timestamp: "2024-01-15 10:30:00",
-    status: "Success",
-  },
-  {
-    id: "2",
-    type: "Return",
-    description: "To Kill a Mockingbird returned by Jane Smith",
-    user: "Jane Smith",
-    timestamp: "2024-01-15 09:15:00",
-    status: "Success",
-  },
-  {
-    id: "3",
-    type: "Register",
-    description: "New member Bob Johnson registered",
-    user: "Admin",
-    timestamp: "2024-01-15 08:45:00",
-    status: "Success",
-  },
-  {
-    id: "4",
-    type: "Update",
-    description: "Book inventory updated - 1984 by George Orwell",
-    user: "Librarian",
-    timestamp: "2024-01-14 16:20:00",
-    status: "Success",
-  },
-  {
-    id: "5",
-    type: "Borrow",
-    description: "Pride and Prejudice borrow request pending",
-    user: "Alice Brown",
-    timestamp: "2024-01-14 14:10:00",
-    status: "Pending",
-  },
-]
-
 export function HistoryPage() {
-  const [activities] = useState<ActivityRecord[]>(mockActivities)
-  const [filteredActivities, setFilteredActivities] = useState<ActivityRecord[]>(mockActivities)
+  const [activities, setActivities] = useState<ActivityRecord[]>([])
+  const [filteredActivities, setFilteredActivities] = useState<ActivityRecord[]>([])
   const [showFilterModal, setShowFilterModal] = useState(false)
+  const [loading, setLoading] = useState(false)
 
   const form = useForm<FilterFormValues>({
     resolver: zodResolver(filterFormSchema),
@@ -139,6 +90,34 @@ export function HistoryPage() {
     setShowFilterModal(false)
   }
 
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true)
+      try {
+        const list = await historyApi.list()
+        setActivities(list)
+        setFilteredActivities(list)
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+
+  // Dynamic stats derived from activities
+  const totalActivities = activities.length
+  const totalBorrowed = activities.filter((a) => a.type === "Borrow").length
+  const totalMemberActions = activities.filter((a) => a.type === "Register").length
+  const todayCount = activities.filter((a) => {
+    const d = new Date(a.timestamp)
+    const now = new Date()
+    return (
+      d.getFullYear() === now.getFullYear() &&
+      d.getMonth() === now.getMonth() &&
+      d.getDate() === now.getDate()
+    )
+  }).length
+
   const getActivityColor = (type: string) => {
     switch (type) {
       case "Borrow":
@@ -189,7 +168,7 @@ export function HistoryPage() {
             <History className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">15,847</div>
+            <div className="text-2xl font-bold">{totalActivities}</div>
             <p className="text-xs text-muted-foreground">All time</p>
           </CardContent>
         </Card>
@@ -199,8 +178,8 @@ export function HistoryPage() {
             <BookOpen className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">8,234</div>
-            <p className="text-xs text-muted-foreground">52% of activities</p>
+            <div className="text-2xl font-bold">{totalBorrowed}</div>
+            <p className="text-xs text-muted-foreground">Borrow events</p>
           </CardContent>
         </Card>
         <Card>
@@ -209,8 +188,8 @@ export function HistoryPage() {
             <User className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">4,567</div>
-            <p className="text-xs text-muted-foreground">29% of activities</p>
+            <div className="text-2xl font-bold">{totalMemberActions}</div>
+            <p className="text-xs text-muted-foreground">Registrations</p>
           </CardContent>
         </Card>
         <Card>
@@ -219,8 +198,8 @@ export function HistoryPage() {
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">127</div>
-            <p className="text-xs text-muted-foreground">+23% from yesterday</p>
+            <div className="text-2xl font-bold">{todayCount}</div>
+            <p className="text-xs text-muted-foreground">Today</p>
           </CardContent>
         </Card>
       </div>
@@ -257,7 +236,8 @@ export function HistoryPage() {
                   </TableCell>
                   <TableCell className="font-medium">{activity.description}</TableCell>
                   <TableCell>{activity.user}</TableCell>
-                  <TableCell>{new Date(activity.timestamp).toLocaleString()}</TableCell>
+                  {/* Avoid locale/timezone differences between SSR and client */}
+                  <TableCell>{activity.timestamp}</TableCell>
                   <TableCell>
                     <Badge variant={getStatusColor(activity.status) as any}>{activity.status}</Badge>
                   </TableCell>

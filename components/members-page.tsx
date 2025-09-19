@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
@@ -14,6 +14,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Plus, Users, UserPlus, UserX, Clock, MoreHorizontal, Eye, Edit, Trash2 } from "lucide-react"
+import { membersApi } from "@/lib/membersApi"
+import type { Member, MemberFormData } from "@/lib/types"
 
 const memberFormSchema = z.object({
   name: z.string().min(1, "Name is required").max(100, "Name must be less than 100 characters"),
@@ -26,48 +28,11 @@ const memberFormSchema = z.object({
 
 type MemberFormValues = z.infer<typeof memberFormSchema>
 
-interface Member {
-  id: string
-  name: string
-  email: string
-  phone: string
-  status: "Active" | "Inactive"
-  joinDate: string
-  booksIssued: number
-}
-
-const mockMembers: Member[] = [
-  {
-    id: "1",
-    name: "John Doe",
-    email: "john@example.com",
-    phone: "+1234567890",
-    status: "Active",
-    joinDate: "2024-01-15",
-    booksIssued: 3,
-  },
-  {
-    id: "2",
-    name: "Jane Smith",
-    email: "jane@example.com",
-    phone: "+1234567891",
-    status: "Active",
-    joinDate: "2024-02-20",
-    booksIssued: 1,
-  },
-  {
-    id: "3",
-    name: "Bob Johnson",
-    email: "bob@example.com",
-    phone: "+1234567892",
-    status: "Inactive",
-    joinDate: "2023-12-10",
-    booksIssued: 0,
-  },
-]
+// Members are now loaded from the API
 
 export function MembersPage() {
-  const [members, setMembers] = useState<Member[]>(mockMembers)
+  const [members, setMembers] = useState<Member[]>([])
+  const [loading, setLoading] = useState<boolean>(false)
   const [showAddModal, setShowAddModal] = useState(false)
   const [editingMember, setEditingMember] = useState<Member | null>(null)
 
@@ -81,22 +46,20 @@ export function MembersPage() {
     },
   })
 
-  const onSubmit = (values: MemberFormValues) => {
-    if (editingMember) {
-      // Update existing member
-      setMembers(members.map((m) => (m.id === editingMember.id ? { ...editingMember, ...values } : m)))
-    } else {
-      // Add new member
-      const member: Member = {
-        id: Date.now().toString(),
-        ...values,
-        joinDate: new Date().toISOString().split("T")[0],
-        booksIssued: 0,
+  const onSubmit = async (values: MemberFormValues) => {
+    try {
+      setLoading(true)
+      if (editingMember) {
+        const updated = await membersApi.update(editingMember.id, values as Partial<MemberFormData>)
+        setMembers((prev) => prev.map((m) => (m.id === updated.id ? updated : m)))
+      } else {
+        const created = await membersApi.create(values as MemberFormData)
+        setMembers((prev) => [created, ...prev])
       }
-      setMembers([...members, member])
+      handleCloseModal()
+    } finally {
+      setLoading(false)
     }
-
-    handleCloseModal()
   }
 
   const handleEditMember = (member: Member) => {
@@ -110,8 +73,9 @@ export function MembersPage() {
     setShowAddModal(true)
   }
 
-  const handleDeleteMember = (id: string) => {
-    setMembers(members.filter((m) => m.id !== id))
+  const handleDeleteMember = async (id: string) => {
+    await membersApi.remove(id)
+    setMembers((prev) => prev.filter((m) => m.id !== id))
   }
 
   const handleCloseModal = () => {
@@ -124,6 +88,19 @@ export function MembersPage() {
       status: "Active",
     })
   }
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true)
+      try {
+        const list = await membersApi.list()
+        setMembers(list)
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
 
   return (
     <div className="p-6 space-y-6">
@@ -139,7 +116,7 @@ export function MembersPage() {
         </Button>
       </div>
 
-      {/* Stats Cards */}
+      {/* Stats Cards (dynamic) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -147,8 +124,8 @@ export function MembersPage() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">1,234</div>
-            <p className="text-xs text-muted-foreground">+12% from last month</p>
+            <div className="text-2xl font-bold">{members.length}</div>
+            <p className="text-xs text-muted-foreground">All time</p>
           </CardContent>
         </Card>
         <Card>
@@ -157,8 +134,8 @@ export function MembersPage() {
             <UserPlus className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">1,156</div>
-            <p className="text-xs text-muted-foreground">+8% from last month</p>
+            <div className="text-2xl font-bold">{members.filter((m) => m.status === "Active").length}</div>
+            <p className="text-xs text-muted-foreground">Currently active</p>
           </CardContent>
         </Card>
         <Card>
@@ -167,8 +144,8 @@ export function MembersPage() {
             <UserX className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">78</div>
-            <p className="text-xs text-muted-foreground">-2% from last month</p>
+            <div className="text-2xl font-bold">{members.filter((m) => m.status === "Inactive").length}</div>
+            <p className="text-xs text-muted-foreground">Paused/disabled</p>
           </CardContent>
         </Card>
         <Card>
@@ -177,8 +154,13 @@ export function MembersPage() {
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">45</div>
-            <p className="text-xs text-muted-foreground">+15% from last month</p>
+            <div className="text-2xl font-bold">{members.filter((m) => {
+              if (!m.joinDate) return false
+              const d = new Date(m.joinDate)
+              const now = new Date()
+              return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth()
+            }).length}</div>
+            <p className="text-xs text-muted-foreground">Joined this month</p>
           </CardContent>
         </Card>
       </div>

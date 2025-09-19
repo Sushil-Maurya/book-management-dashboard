@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { useForm } from "react-hook-form"
 import { zodResolver } from "@hookform/resolvers/zod"
 import * as z from "zod"
@@ -12,6 +12,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Download, BarChart3, PieChart, TrendingUp, Calendar } from "lucide-react"
+import { reportsApi } from "@/lib/reportsApi"
+import type { ReportData } from "@/lib/types"
 
 const exportFormSchema = z.object({
   reportType: z.string().min(1, "Report type is required"),
@@ -23,41 +25,12 @@ const exportFormSchema = z.object({
 
 type ExportFormValues = z.infer<typeof exportFormSchema>
 
-interface ReportData {
-  id: string
-  title: string
-  type: "PDF" | "Excel" | "CSV"
-  generatedDate: string
-  status: "Ready" | "Generating" | "Failed"
-}
-
-const mockReports: ReportData[] = [
-  {
-    id: "1",
-    title: "Monthly Borrowing Report",
-    type: "PDF",
-    generatedDate: "2024-01-15",
-    status: "Ready",
-  },
-  {
-    id: "2",
-    title: "Member Activity Analysis",
-    type: "Excel",
-    generatedDate: "2024-01-14",
-    status: "Ready",
-  },
-  {
-    id: "3",
-    title: "Book Inventory Summary",
-    type: "CSV",
-    generatedDate: "2024-01-13",
-    status: "Ready",
-  },
-]
+// Reports now fetched from API
 
 export function ReportsPage() {
-  const [reports, setReports] = useState<ReportData[]>(mockReports)
+  const [reports, setReports] = useState<ReportData[]>([])
   const [showExportModal, setShowExportModal] = useState(false)
+  const [loading, setLoading] = useState(false)
 
   const form = useForm<ExportFormValues>({
     resolver: zodResolver(exportFormSchema),
@@ -68,23 +41,28 @@ export function ReportsPage() {
     },
   })
 
-  const onSubmit = (values: ExportFormValues) => {
-    const newReport: ReportData = {
-      id: Date.now().toString(),
-      title: getReportTitle(values.reportType),
-      type: values.format,
-      generatedDate: new Date().toISOString().split("T")[0],
-      status: "Generating",
+  const onSubmit = async (values: ExportFormValues) => {
+    setLoading(true)
+    try {
+      const newReportPayload = {
+        title: getReportTitle(values.reportType),
+        type: values.format as ReportData["type"],
+        generatedDate: new Date().toISOString().slice(0, 10),
+        status: "Generating" as ReportData["status"],
+      }
+      const created = await reportsApi.create(newReportPayload)
+      setReports((prev) => [created, ...prev])
+      setShowExportModal(false)
+      form.reset()
+
+      // Simulate generation: mark Ready after 3s
+      setTimeout(async () => {
+        const ready = await reportsApi.update(created.id, { status: "Ready" })
+        setReports((prev) => prev.map((r) => (r.id === ready.id ? ready : r)))
+      }, 3000)
+    } finally {
+      setLoading(false)
     }
-
-    setReports([newReport, ...reports])
-    setShowExportModal(false)
-    form.reset()
-
-    // Simulate report generation
-    setTimeout(() => {
-      setReports((prev) => prev.map((r) => (r.id === newReport.id ? { ...r, status: "Ready" as const } : r)))
-    }, 3000)
   }
 
   const getReportTitle = (type: string) => {
@@ -110,6 +88,32 @@ export function ReportsPage() {
     link.click()
   }
 
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true)
+      try {
+        const list = await reportsApi.list()
+        setReports(list)
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+
+  // Dynamic stats derived from reports
+  const totalReports = reports.length
+  const readyReports = reports.filter((r) => r.status === "Ready").length
+  const generatingReports = reports.filter((r) => r.status === "Generating").length
+  const popularFormat = (() => {
+    const counts: Record<string, number> = {}
+    for (const r of reports) counts[r.type] = (counts[r.type] || 0) + 1
+    const entries = Object.entries(counts)
+    if (!entries.length) return "—"
+    entries.sort((a, b) => b[1] - a[1])
+    return entries[0][0]
+  })()
+
   return (
     <div className="p-6 space-y-6">
       {/* Header */}
@@ -124,46 +128,46 @@ export function ReportsPage() {
         </Button>
       </div>
 
-      {/* Report Stats */}
+      {/* Report Stats (dynamic) */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Books Borrowed</CardTitle>
+            <CardTitle className="text-sm font-medium">Total Reports</CardTitle>
             <BarChart3 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">2,847</div>
-            <p className="text-xs text-muted-foreground">This month</p>
+            <div className="text-2xl font-bold">{totalReports}</div>
+            <p className="text-xs text-muted-foreground">All time</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Popular Genre</CardTitle>
+            <CardTitle className="text-sm font-medium">Popular Format</CardTitle>
             <PieChart className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">Fiction</div>
-            <p className="text-xs text-muted-foreground">42% of all borrows</p>
+            <div className="text-2xl font-bold">{popularFormat}</div>
+            <p className="text-xs text-muted-foreground">Most generated</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Growth Rate</CardTitle>
+            <CardTitle className="text-sm font-medium">Ready Reports</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">+18%</div>
-            <p className="text-xs text-muted-foreground">Compared to last month</p>
+            <div className="text-2xl font-bold">{readyReports}</div>
+            <p className="text-xs text-muted-foreground">Completed</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Avg. Borrow Time</CardTitle>
+            <CardTitle className="text-sm font-medium">Generating</CardTitle>
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">12 days</div>
-            <p className="text-xs text-muted-foreground">Per book borrowed</p>
+            <div className="text-2xl font-bold">{generatingReports}</div>
+            <p className="text-xs text-muted-foreground">In progress</p>
           </CardContent>
         </Card>
       </div>

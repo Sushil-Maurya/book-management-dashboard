@@ -10,7 +10,6 @@ import { ThemeProvider } from "@/components/theme-provider"
 export const metadata: Metadata = {
   title: "Book Management Dashboard",
   description: "A comprehensive dashboard for managing book inventory with CRUD operations",
-  generator: "v0.app",
 }
 
 export default function RootLayout({
@@ -19,7 +18,7 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <body>
         <ThemeProvider defaultTheme="system" storageKey="book-dashboard-theme">
           <CssBaseline />

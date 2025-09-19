@@ -51,7 +51,8 @@ export function AppLayout({ children }: AppLayoutProps) {
   const pathname = usePathname()
   const muiTheme = useMuiTheme()
   const { theme, setTheme } = useTheme()
-  const isMobile = useMediaQuery(muiTheme.breakpoints.down("md"))
+  // Avoid SSR/client mismatch: evaluate media query on client only
+  const isMobile = useMediaQuery(muiTheme.breakpoints.down("md"), { noSsr: true })
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen)
